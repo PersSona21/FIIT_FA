@@ -230,20 +230,13 @@ public abstract class BinarySearchTreeBase<TKey, TValue, TNode>(IComparer<TKey>?
         v?.Parent = u.Parent;
     }
     #endregion
-    
-    public IEnumerable<TreeEntry<TKey, TValue>>  InOrder() => InOrderTraversal(Root);
-    
-    private IEnumerable<TreeEntry<TKey, TValue>>  InOrderTraversal(TNode? node)
-    {
-        if (node == null) {  yield break; }
-        throw new NotImplementedException();
-    }
-    
-    public IEnumerable<TreeEntry<TKey, TValue>>  PreOrder() => throw new NotImplementedException();
-    public IEnumerable<TreeEntry<TKey, TValue>>  PostOrder() => throw new NotImplementedException();
-    public IEnumerable<TreeEntry<TKey, TValue>>  InOrderReverse() => throw new NotImplementedException();
-    public IEnumerable<TreeEntry<TKey, TValue>>  PreOrderReverse() => throw new NotImplementedException();
-    public IEnumerable<TreeEntry<TKey, TValue>>  PostOrderReverse() => throw new NotImplementedException();
+
+    public IEnumerable<TreeEntry<TKey, TValue>> InOrder() => new TreeIterator(Root, TraversalStrategy.InOrder);
+    public IEnumerable<TreeEntry<TKey, TValue>>  PreOrder() => new TreeIterator(Root, TraversalStrategy.PreOrder);
+    public IEnumerable<TreeEntry<TKey, TValue>>  PostOrder() => new TreeIterator(Root, TraversalStrategy.PostOrder);
+    public IEnumerable<TreeEntry<TKey, TValue>>  InOrderReverse() => new TreeIterator(Root, TraversalStrategy.InOrderReverse);
+    public IEnumerable<TreeEntry<TKey, TValue>>  PreOrderReverse() => new TreeIterator(Root, TraversalStrategy.PreOrderReverse);
+    public IEnumerable<TreeEntry<TKey, TValue>>  PostOrderReverse() => new TreeIterator(Root, TraversalStrategy.PostOrderReverse);
     
     /// <summary>
     /// Внутренний класс-итератор. 
@@ -254,29 +247,168 @@ public abstract class BinarySearchTreeBase<TKey, TValue, TNode>(IComparer<TKey>?
         IEnumerator<TreeEntry<TKey, TValue>>
     {
         // probably add something here
-        private readonly TraversalStrategy _strategy; // or make it template parameter?
+        private TreeEntry<TKey, TValue> _current;
+        private readonly TNode? _root;
+        private readonly Stack<(TNode node, int depth, bool childrenPushed)> _stack; // childrenPushed для PostOrder
+        private readonly TraversalStrategy _strategy;
+        
+        public TreeIterator(TNode? root, TraversalStrategy strategy)
+        {
+            _root = root;
+            _strategy = strategy;
+            _stack = new Stack<(TNode, int, bool)>();
+            _current = default;
+            Reset();
+        }
         
         public IEnumerator<TreeEntry<TKey, TValue>> GetEnumerator() => this;
         IEnumerator IEnumerable.GetEnumerator() => this;
         
-        public TreeEntry<TKey, TValue> Current => throw new NotImplementedException();
+        public TreeEntry<TKey, TValue> Current => _current;
         object IEnumerator.Current => Current;
+
+
+        private void PushLeftChain(TNode? node, int depth)
+        {
+            while (node != null)
+            {
+                _stack.Push((node, depth, false));
+                node = node.Left;
+                depth++;
+            }
+        }
         
+        private void PushRightChain(TNode? node, int depth)
+        {
+            while (node != null)
+            {
+                _stack.Push((node, depth, false));
+                node = node.Right;
+                depth++;
+            }
+        }
         
         public bool MoveNext()
         {
-            if (_strategy == TraversalStrategy.InOrder)
+            switch (_strategy)
             {
-                throw new NotImplementedException();
+                case TraversalStrategy.InOrder:
+                {
+                    if (_stack.Count == 0)
+                        return false;
+                    var (node, depth, _) = _stack.Pop();
+                    _current = new TreeEntry<TKey, TValue>(node.Key, node.Value, depth);
+                    PushLeftChain(node.Right, depth+1);
+                    return true;
+                }
+                
+                case TraversalStrategy.PreOrder:
+                {
+                    if (_stack.Count == 0)
+                        return false;
+                    var (node, depth, _) = _stack.Pop();
+                    _current = new TreeEntry<TKey, TValue>(node.Key, node.Value, depth);
+                
+                    // Так как с начала PreOrder то с начала проходим Left потом Right
+                    if (node.Right != null) _stack.Push((node.Right, depth+1, false));
+                    if (node.Left != null) _stack.Push((node.Left, depth+1, false));
+
+                    return true;
+                }
+                
+                case TraversalStrategy.PostOrder:
+                {
+                    while (_stack.Count > 0)
+                    {
+                        var (node, depth, childrenPushed) = _stack.Pop();
+
+                        if (childrenPushed)
+                        {
+                            _current = new TreeEntry<TKey, TValue>(node.Key, node.Value, depth);
+                            return true;
+                        }
+                    
+                        _stack.Push((node, depth, true));
+                        if (node.Right != null) _stack.Push((node.Right, depth + 1, false));
+                        if (node.Left  != null) _stack.Push((node.Left,  depth + 1, false));
+                    }
+                    return false;
+                }
+
+                case TraversalStrategy.InOrderReverse:
+                {
+                    if (_stack.Count == 0)
+                        return false;
+
+                    var (node, depth, _) = _stack.Pop();
+                    _current = new TreeEntry<TKey, TValue>(node.Key, node.Value, depth);
+                    PushRightChain(node.Left, depth+1);
+                    return true;
+                }
+
+                case TraversalStrategy.PreOrderReverse:
+                {
+                    if (_stack.Count == 0)
+                        return false;
+
+                    var (node, depth, _) = _stack.Pop();
+                    _current = new TreeEntry<TKey, TValue>(node.Key, node.Value, depth);
+                    if (node.Left != null) _stack.Push((node.Left, depth+1,false));
+                    if (node.Right != null) _stack.Push((node.Right, depth+1,false));
+                    return true;
+                }
+
+                case TraversalStrategy.PostOrderReverse:
+                {
+                    while (_stack.Count > 0)
+                    {
+                        var (node, depth, childrenPushed) = _stack.Pop();
+
+                        if (childrenPushed)
+                        {
+                            _current = new TreeEntry<TKey, TValue>(node.Key, node.Value, depth);
+                            return true;
+                        }
+                        
+                        _stack.Push((node, depth, true));
+                        if (node.Left != null) _stack.Push((node.Left, depth+1, false));
+                        if (node.Right != null) _stack.Push((node.Right, depth+1, false));
+                        
+                    }
+
+                    return false;
+                }
+                    
+                default:
+                    throw new NotImplementedException("Strategy not implemented");
             }
-            throw new NotImplementedException("Strategy not implemented");
         }
         
         public void Reset()
         {
-            throw new NotImplementedException();
-        }
+            _stack.Clear();
 
+            switch (_strategy)
+            {
+                case TraversalStrategy.InOrder:
+                    PushLeftChain(_root, 0);
+                    break;
+                
+                case TraversalStrategy.InOrderReverse:
+                    PushRightChain(_root, 0);
+                    break;
+                
+                case TraversalStrategy.PreOrder:
+                case TraversalStrategy.PostOrder:
+                case TraversalStrategy.PreOrderReverse:
+                case TraversalStrategy.PostOrderReverse:    
+                    if (_root != null) _stack.Push((_root, 0, false));
+                    break;
+                
+                default:
+                    throw new NotImplementedException("Strategy not implemented");
+            }
+        }
         
         public void Dispose()
         {
