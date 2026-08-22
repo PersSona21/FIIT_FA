@@ -21,8 +21,55 @@ public abstract class BinarySearchTreeBase<TKey, TValue, TNode>(IComparer<TKey>?
     
     public virtual void Add(TKey key, TValue value)
     {
-        throw new NotImplementedException(
-            "Implement standard BST add logic using <CreateNode(key, value)> and OnNodeAdded(newNode)");
+        if (Root == null)
+        {
+            Root = CreateNode(key, value);
+            OnNodeAdded(Root);
+            Count++;
+            return;
+        }
+
+        TNode current = Root;
+        
+        while (true)
+        {
+            int cmp = Comparer.Compare(key, current.Key);
+            
+            if (cmp == 0)
+            {
+                current.Value = value;
+                return;
+            }
+
+            if (cmp < 0)
+            {
+                if (current.Left == null)
+                {
+                    TNode newNode = CreateNode(key, value);
+                    newNode.Parent = current;
+                    current.Left = newNode;
+                    Count++;
+                    OnNodeAdded(newNode);
+                    return;
+                }
+
+                current = current.Left;
+            }
+            else
+            {
+                if (current.Right == null)
+                {
+                    TNode newNode = CreateNode(key, value);
+                    newNode.Parent = current;
+                    current.Right = newNode;
+                    Count++;
+                    OnNodeAdded(newNode);
+                    return;
+                }
+
+                current = current.Right;
+            }
+        }
     }
 
     
@@ -99,32 +146,71 @@ public abstract class BinarySearchTreeBase<TKey, TValue, TNode>(IComparer<TKey>?
 
     protected void RotateLeft(TNode x)
     {
-        throw new NotImplementedException();
+        TNode y = x.Right ?? throw new InvalidOperationException("Невозможно выполнить левый поворот");
+        x.Right = y.Left;
+        if (y.Left != null) y.Left.Parent = x;
+
+        Transplant(x, y);
+        
+        // y.Parent = x.Parent;
+        // if (x.Parent == null) Root = y;
+        // else if (x.IsLeftChild) x.Parent.Left = y;
+        // else x.Parent.Right = y;
+        
+        x.Parent = y;
+        y.Left = x;
     }
 
     protected void RotateRight(TNode y)
     {
-        throw new NotImplementedException();
+        TNode x = y.Left ?? throw new InvalidOperationException("Невозможно выполнить правый поворот");
+        y.Left = x.Right;
+        if (x.Right != null) x.Right.Parent = y;
+
+        Transplant(y, x);
+        
+        // x.Parent = y.Parent;
+        // if (y.Parent == null) Root = x;
+        // else if (y.IsLeftChild) y.Parent.Left = x;
+        // else y.Parent.Right = x;
+
+        y.Parent = x;
+        x.Right = y;
+
     }
     
     protected void RotateBigLeft(TNode x)
     {
-        throw new NotImplementedException();
+        RotateLeft(x);
+        RotateLeft(x.Parent ?? throw new InvalidOperationException(
+            "Невозможно выполнить большой левый поворот"));
     }
-    
+
     protected void RotateBigRight(TNode y)
     {
-        throw new NotImplementedException();
+        RotateRight(y);
+        RotateRight(y.Parent ?? throw new InvalidOperationException(
+            "Невозможно выполнить большой правый поворот"));
     }
     
     protected void RotateDoubleLeft(TNode x)
     {
-        throw new NotImplementedException();
+        // RL
+        if (x.Right == null)
+            throw new InvalidOperationException("Невозможно выполнить двойной левый поворот");
+
+        RotateRight(x.Right);
+        RotateLeft(x);
     }
     
     protected void RotateDoubleRight(TNode y)
     {
-        throw new NotImplementedException();
+        // LR
+        if (y.Left == null)
+            throw new InvalidOperationException("Невозможно выполнить двойной правый поворот");
+
+        RotateLeft(y.Left);
+        RotateRight(y);
     }
     
     protected void Transplant(TNode u, TNode? v)
