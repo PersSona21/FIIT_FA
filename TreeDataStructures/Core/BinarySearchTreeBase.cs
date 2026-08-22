@@ -15,17 +15,16 @@ public abstract class BinarySearchTreeBase<TKey, TValue, TNode>(IComparer<TKey>?
     
     public bool IsReadOnly => false;
 
-    public ICollection<TKey> Keys => throw new NotImplementedException();
-    public ICollection<TValue> Values => throw new NotImplementedException();
-    
+    public ICollection<TKey> Keys => InOrder().Select(e => e.Key).ToList();
+    public ICollection<TValue> Values => InOrder().Select(e => e.Value).ToList();
     
     public virtual void Add(TKey key, TValue value)
     {
         if (Root == null)
         {
             Root = CreateNode(key, value);
-            OnNodeAdded(Root);
             Count++;
+            OnNodeAdded(Root);
             return;
         }
 
@@ -86,7 +85,62 @@ public abstract class BinarySearchTreeBase<TKey, TValue, TNode>(IComparer<TKey>?
     
     protected virtual void RemoveNode(TNode node)
     {
-        throw new NotImplementedException("Implement standard BST delete logic using Transplant helper");
+        TNode? parent;
+        TNode? child;
+
+        if (node.Left == null && node.Right == null)
+        {
+            parent = node.Parent;
+            child = null;
+            Transplant(node, null);
+        }
+        else if (node.Left == null)
+        {
+            parent = node.Parent;
+            child = node.Right;
+            Transplant(node, node.Right);
+        }
+        else if (node.Right == null)
+        {
+            parent = node.Parent;
+            child = node.Left;
+            Transplant(node, node.Left);
+        }
+        else
+        {
+            TNode successor = FindMin(node.Right);
+
+            if (successor.Parent == node)
+            {
+                parent = node.Parent;
+                child = successor;
+                Transplant(node, successor);
+                successor.Left = node.Left;
+                successor.Left.Parent = successor;
+            }
+            else
+            {
+                parent = successor.Parent;
+                child = successor.Right;
+                Transplant(successor, successor.Right);
+
+                successor.Right = node.Right;
+                successor.Right.Parent = successor;
+
+                Transplant(node, successor);          // ← было пропущено
+                successor.Left = node.Left;
+                successor.Left.Parent = successor;     // ← было пропущено
+            }
+        }
+
+        OnNodeRemoved(parent, child);
+    }
+
+    private static TNode FindMin(TNode node)
+    {
+        while (node.Left != null)
+            node = node.Left;
+        return node;
     }
 
     public virtual bool ContainsKey(TKey key) => FindNode(key) != null;
@@ -152,11 +206,6 @@ public abstract class BinarySearchTreeBase<TKey, TValue, TNode>(IComparer<TKey>?
 
         Transplant(x, y);
         
-        // y.Parent = x.Parent;
-        // if (x.Parent == null) Root = y;
-        // else if (x.IsLeftChild) x.Parent.Left = y;
-        // else x.Parent.Right = y;
-        
         x.Parent = y;
         y.Left = x;
     }
@@ -168,15 +217,9 @@ public abstract class BinarySearchTreeBase<TKey, TValue, TNode>(IComparer<TKey>?
         if (x.Right != null) x.Right.Parent = y;
 
         Transplant(y, x);
-        
-        // x.Parent = y.Parent;
-        // if (y.Parent == null) Root = x;
-        // else if (y.IsLeftChild) y.Parent.Left = x;
-        // else y.Parent.Right = x;
-
+  
         y.Parent = x;
         x.Right = y;
-
     }
     
     protected void RotateBigLeft(TNode x)
@@ -421,7 +464,9 @@ public abstract class BinarySearchTreeBase<TKey, TValue, TNode>(IComparer<TKey>?
     
     public IEnumerator<KeyValuePair<TKey, TValue>> GetEnumerator()
     {
-        throw new NotImplementedException();
+        return InOrder()
+            .Select(e => new KeyValuePair<TKey, TValue>(e.Key, e.Value))
+            .GetEnumerator();
     }
     
     IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
@@ -430,6 +475,17 @@ public abstract class BinarySearchTreeBase<TKey, TValue, TNode>(IComparer<TKey>?
     public void Add(KeyValuePair<TKey, TValue> item) => Add(item.Key, item.Value);
     public void Clear() { Root = null; Count = 0; }
     public bool Contains(KeyValuePair<TKey, TValue> item) => ContainsKey(item.Key);
-    public void CopyTo(KeyValuePair<TKey, TValue>[] array, int arrayIndex) => throw new NotImplementedException();
+
+    public void CopyTo(KeyValuePair<TKey, TValue>[] array, int arrayIndex)
+    {
+        if (arrayIndex < 0 || arrayIndex > array.Length)
+            throw new ArgumentOutOfRangeException(nameof(arrayIndex));
+        if (array.Length - arrayIndex < Count)
+            throw new ArgumentException("Недостаточно места в массиве");
+        
+        int i = arrayIndex;
+        foreach (var entry in InOrder())
+            array[i++] = new KeyValuePair<TKey, TValue>(entry.Key, entry.Value);
+    }
     public bool Remove(KeyValuePair<TKey, TValue> item) => Remove(item.Key);
 }
