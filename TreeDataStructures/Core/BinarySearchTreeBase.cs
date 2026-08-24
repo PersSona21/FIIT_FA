@@ -127,9 +127,9 @@ public abstract class BinarySearchTreeBase<TKey, TValue, TNode>(IComparer<TKey>?
                 successor.Right = node.Right;
                 successor.Right.Parent = successor;
 
-                Transplant(node, successor);          // ← было пропущено
+                Transplant(node, successor);
                 successor.Left = node.Left;
-                successor.Left.Parent = successor;     // ← было пропущено
+                successor.Left.Parent = successor;
             }
         }
 
