@@ -224,36 +224,36 @@ public abstract class BinarySearchTreeBase<TKey, TValue, TNode>(IComparer<TKey>?
     
     protected void RotateBigLeft(TNode x)
     {
-        RotateLeft(x);
-        RotateLeft(x.Parent ?? throw new InvalidOperationException(
-            "Невозможно выполнить большой левый поворот"));
-    }
-
-    protected void RotateBigRight(TNode y)
-    {
-        RotateRight(y);
-        RotateRight(y.Parent ?? throw new InvalidOperationException(
-            "Невозможно выполнить большой правый поворот"));
-    }
-    
-    protected void RotateDoubleLeft(TNode x)
-    {
         // RL
         if (x.Right == null)
-            throw new InvalidOperationException("Невозможно выполнить двойной левый поворот");
+            throw new InvalidOperationException("Невозможно выполнить большой левый поворот");
 
         RotateRight(x.Right);
         RotateLeft(x);
     }
-    
-    protected void RotateDoubleRight(TNode y)
+
+    protected void RotateBigRight(TNode y)
     {
         // LR
         if (y.Left == null)
-            throw new InvalidOperationException("Невозможно выполнить двойной правый поворот");
+            throw new InvalidOperationException("Невозможно выполнить большой правый поворот");
 
         RotateLeft(y.Left);
         RotateRight(y);
+    }
+    
+    protected void RotateDoubleLeft(TNode x)
+    {
+        RotateLeft(x);
+        RotateLeft(x.Parent ?? throw new InvalidOperationException(
+            "Невозможно выполнить двойной левый поворот"));
+    }
+    
+    protected void RotateDoubleRight(TNode y)
+    {
+        RotateRight(y);
+        RotateRight(y.Parent ?? throw new InvalidOperationException(
+            "Невозможно выполнить двойной правый поворот"));
     }
     
     protected void Transplant(TNode u, TNode? v)
