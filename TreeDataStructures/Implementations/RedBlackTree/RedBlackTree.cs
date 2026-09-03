@@ -43,6 +43,9 @@ public class RedBlackTree<TKey, TValue> : BinarySearchTreeBase<TKey, TValue, RbN
 
     private void FixInsert(RbNode<TKey, TValue> node)
     {
+        /* Случай 2
+         * Родитель чёрный, ниачего не делаем.
+         */
         while (IsRed(node.Parent))
         {
             var parent = node.Parent!;
@@ -64,6 +67,8 @@ public class RedBlackTree<TKey, TValue> : BinarySearchTreeBase<TKey, TValue, RbN
                     {
                         node = parent;
                         RotateLeft(node);
+                        // RotateLeft(parent);
+                        // node = node.Left!;
                     }
                     parent = node.Parent!;
                     grandparent = node.Grandparent!;
@@ -96,6 +101,10 @@ public class RedBlackTree<TKey, TValue> : BinarySearchTreeBase<TKey, TValue, RbN
                 }
             }
         }
+        
+        /*  случай 1
+         *  Текущий узел N в корне дерева. В этом случае, он перекрашивается в чёрный цвет.
+         */
         SetBlack(this.Root);
     }
     
@@ -157,6 +166,7 @@ public class RedBlackTree<TKey, TValue> : BinarySearchTreeBase<TKey, TValue, RbN
             FixDelete(x, xParent);
         }
     }
+    
     private void FixDelete(RbNode<TKey, TValue>? x, RbNode<TKey, TValue>? xParent)
     {
         while (x != Root && IsBlack(x))
@@ -189,7 +199,7 @@ public class RedBlackTree<TKey, TValue> : BinarySearchTreeBase<TKey, TValue, RbN
                         sibling = xParent.Right;
                     }
 
-                    if (sibling != null) sibling.Color = xParent.Color;
+                    sibling?.Color = xParent.Color;
                     SetBlack(xParent);
                     SetBlack(sibling?.Right);
                     RotateLeft(xParent);
@@ -225,7 +235,7 @@ public class RedBlackTree<TKey, TValue> : BinarySearchTreeBase<TKey, TValue, RbN
                         sibling = xParent.Left;
                     }
 
-                    if (sibling != null) sibling.Color = xParent.Color;
+                    sibling?.Color = xParent.Color;
                     SetBlack(xParent);
                     SetBlack(sibling?.Left);
                     RotateRight(xParent);
