@@ -201,15 +201,89 @@ public sealed class BetterBigInteger : IBigInteger
     
     public static BetterBigInteger operator *(BetterBigInteger a, BetterBigInteger b)
        => throw new NotImplementedException("Умножение делегируется стратегии, выбирать необходимо в зависимости от размеров чисел");
-
+    
     public static BetterBigInteger operator ~(BetterBigInteger a)
     {
         return -a - new BetterBigInteger([1], false);
     }
-    public static BetterBigInteger operator &(BetterBigInteger a, BetterBigInteger b) => throw new NotImplementedException();
-    public static BetterBigInteger operator |(BetterBigInteger a, BetterBigInteger b) => throw new NotImplementedException();
-    public static BetterBigInteger operator ^(BetterBigInteger a, BetterBigInteger b) => throw new NotImplementedException();
-    public static BetterBigInteger operator <<(BetterBigInteger a, int shift) => throw new NotImplementedException();
+
+    // в доп код
+    private static uint[] ToTwosComplement(ReadOnlySpan<uint> digits, bool isNegative, int length)
+    {
+        var result = new uint[length];
+        for (var i = 0; i < length; ++i)
+        {
+            if (isNegative) result[i] = (i < digits.Length) ? ~digits[i] : 0;
+            else result[i] = (i < digits.Length) ? digits[i] : 0;
+        }
+
+        if (isNegative) result = AddValues(result, [1]);
+        
+        return result;
+    }
+
+    // из доп кода
+    private static BetterBigInteger FromTwosComplement(uint[] digits)
+    {
+        var length = digits.Length;
+        if (digits[length-1] >> 31 == 1)
+        {
+            var subtracted = SubtractValues(digits, [1]);
+            var result = new uint[length];
+            for (var i = 0; i < length; ++i)
+            {
+                result[i] = (i < subtracted.Length) ? ~subtracted[i] : ~0u;
+            }
+
+            return new BetterBigInteger(result, true);
+        }
+        else return new BetterBigInteger(digits, false);
+    }
+
+
+    public static BetterBigInteger operator &(BetterBigInteger a, BetterBigInteger b)
+    {
+        var maxLen = Math.Max(a.GetDigits().Length, b.GetDigits().Length) + 1;
+        var result = new uint[maxLen];
+        var a1 = ToTwosComplement(a.GetDigits(), a.IsNegative, maxLen);
+        var b1 = ToTwosComplement(b.GetDigits(), b.IsNegative, maxLen);
+        for (int i = 0; i < maxLen; ++i)
+        {
+            result[i] = a1[i] & b1[i];
+        }
+        
+        return FromTwosComplement(result);
+    }
+    public static BetterBigInteger operator |(BetterBigInteger a, BetterBigInteger b){
+        var maxLen = Math.Max(a.GetDigits().Length, b.GetDigits().Length) + 1;
+        var result = new uint[maxLen];
+        var a1 = ToTwosComplement(a.GetDigits(), a.IsNegative, maxLen);
+        var b1 = ToTwosComplement(b.GetDigits(), b.IsNegative, maxLen);
+        for (int i = 0; i < maxLen; ++i)
+        {
+            result[i] = a1[i] | b1[i];
+        }
+        
+        return FromTwosComplement(result);
+    }
+    public static BetterBigInteger operator ^(BetterBigInteger a, BetterBigInteger b){
+        var maxLen = Math.Max(a.GetDigits().Length, b.GetDigits().Length) + 1;
+        var result = new uint[maxLen];
+        var a1 = ToTwosComplement(a.GetDigits(), a.IsNegative, maxLen);
+        var b1 = ToTwosComplement(b.GetDigits(), b.IsNegative, maxLen);
+        for (int i = 0; i < maxLen; ++i)
+        {
+            result[i] = a1[i] ^ b1[i];
+        }
+        
+        return FromTwosComplement(result);
+    }
+
+    public static BetterBigInteger operator <<(BetterBigInteger a, int shift)
+    {
+        var a1 = ToTwosComplement(a.GetDigits(), a.IsNegative, a.GetDigits().Length);
+        throw new NotImplementedException();
+    }
     public static BetterBigInteger operator >> (BetterBigInteger a, int shift) => throw new NotImplementedException();
     
     public static bool operator ==(BetterBigInteger a, BetterBigInteger b) => Equals(a, b);
