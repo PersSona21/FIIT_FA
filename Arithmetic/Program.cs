@@ -15,12 +15,13 @@ static void Print(BetterBigInteger a)
 
 
 uint[] data1 = [1, 3, 5];
-uint[] data2 = [6, 3];
+uint[] data2 = [6];
 
-BetterBigInteger a = new BetterBigInteger(data1);
-BetterBigInteger b = new BetterBigInteger(data2);
+// BetterBigInteger a = new BetterBigInteger(data1);
+BetterBigInteger b = new BetterBigInteger("+12+3", 10);
 // var d = new SimpleMultiplier();
 
-var c = a * b;
+// var c = a * b;
 
-Print(c);
+Print(b);
+Console.WriteLine(b);

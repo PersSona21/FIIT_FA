@@ -1,4 +1,5 @@
 ﻿using System.Runtime.CompilerServices;
+using System.Text;
 using Arithmetic.BigInt.Interfaces;
 using Arithmetic.BigInt.MultiplyStrategy;
 
@@ -48,7 +49,33 @@ public sealed class BetterBigInteger : IBigInteger
     
     public BetterBigInteger(string value, int radix)
     {
-        throw new NotImplementedException();
+        if (radix < 2 || radix > 36) throw new ArgumentOutOfRangeException("radix", "Основание должно быть от 2 до 36");
+        if (value.Length == 0 || (value.Length == 1 && (value[0] == '-' || value[0] == '+'))) throw new ArgumentException("Строка не корректна");
+        bool flag = false;
+        if (value[0] == '-' || value[0] == '+')
+        {
+            if (value[0] == '-') flag = true;
+            value = value[1..]; // убираю знак
+        }
+
+        BetterBigInteger result = new BetterBigInteger([0]);
+        BetterBigInteger radixBig = new BetterBigInteger([(uint)radix]);
+
+        uint num;
+        foreach (var ch in value.ToLower())
+        {
+            if (ch >= '0' && ch <= '9') num = (uint)(ch - '0');
+            else if (ch >= 'a' && ch <= 'z') num = (uint)(ch - 'a' + 10);
+            else throw new ArgumentException("Число не корректное");
+            if (num >= radix) throw new ArgumentException("Число не корректное");
+            BetterBigInteger digitBig = new BetterBigInteger([num]);
+            result = result * radixBig + digitBig;
+        }
+
+        _data = result._data;
+        _smallValue = result._smallValue;
+        _signBit = flag ? 1 : 0;
+        if (_data == null && _smallValue == 0) _signBit = 0;
     }
     
     public ReadOnlySpan<uint> GetDigits()
@@ -191,6 +218,22 @@ public sealed class BetterBigInteger : IBigInteger
     {
         return new BetterBigInteger(a.GetDigits().ToArray(), (!a.IsNegative));
     }
+
+    private static (uint[], uint) SimpleDivideNumber(ReadOnlySpan<uint> a, uint b)
+    {
+        var result = new uint[a.Length];
+
+        uint reminder = 0;
+
+        for (var i = a.Length - 1; i >= 0; --i)
+        {
+            ulong current = reminder * (1ul << 32) + a[i];
+            result[i] = (uint)(current / b);
+            reminder = (uint)(current % b);
+        }
+        
+        return (result, reminder);
+    }
     
     public static BetterBigInteger operator /(BetterBigInteger a, BetterBigInteger b) => throw new NotImplementedException();
     public static BetterBigInteger operator %(BetterBigInteger a, BetterBigInteger b) => throw new NotImplementedException();
@@ -213,7 +256,7 @@ public sealed class BetterBigInteger : IBigInteger
         var result = new uint[length];
         for (var i = 0; i < length; ++i)
         {
-            if (isNegative) result[i] = (i < digits.Length) ? ~digits[i] : 0;
+            if (isNegative) result[i] = (i < digits.Length) ? ~digits[i] : ~0u;
             else result[i] = (i < digits.Length) ? digits[i] : 0;
         }
 
@@ -286,7 +329,6 @@ public sealed class BetterBigInteger : IBigInteger
         else if (shift == 0) return a;
 
         var digits = a.GetDigits();
-        if (shift >= digits.Length * 32) return new BetterBigInteger([0]);
         
         var wordShift = shift / 32;
         var bitShift = shift % 32;
@@ -348,6 +390,30 @@ public sealed class BetterBigInteger : IBigInteger
     public static bool operator >=(BetterBigInteger a, BetterBigInteger b) => a.CompareTo(b) >= 0;
     
     public override string ToString() => ToString(10);
-    public string ToString(int radix) => throw new NotImplementedException();
+
+    private static bool IsZero(ReadOnlySpan<uint> digits)
+    {
+        foreach (var d in digits)
+            if (d != 0) return false;
+        return true;
+    }
+    
+    public string ToString(int radix)
+    {
+        if (radix < 2 || radix > 36) throw new ArgumentOutOfRangeException("radix", "Основание должно быть от 2 до 36");
+        if (IsZero(GetDigits())) return "0";
+        var data = GetDigits().ToArray();
+        var chars = new List<char>();
+        while (!IsZero(data))
+        {
+            var (a,b) = SimpleDivideNumber(data, (uint)radix);
+            char ch = b < 10 ? (char)('0' + b) : (char)('a' + (b - 10));
+            chars.Add(ch);
+            data = a;
+        }
+        if (this.IsNegative) chars.Add('-');
+        chars.Reverse();
+        return new string(chars.ToArray());
+    }
     
 }
