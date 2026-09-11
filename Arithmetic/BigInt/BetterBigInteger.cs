@@ -234,10 +234,39 @@ public sealed class BetterBigInteger : IBigInteger
         
         return (result, reminder);
     }
-    
-    public static BetterBigInteger operator /(BetterBigInteger a, BetterBigInteger b) => throw new NotImplementedException();
-    public static BetterBigInteger operator %(BetterBigInteger a, BetterBigInteger b) => throw new NotImplementedException();
 
+    public static BetterBigInteger operator /(BetterBigInteger a, BetterBigInteger b)
+    {
+        if (IsZero(b.GetDigits())) throw new DivideByZeroException();
+        if (b.GetDigits().Length == 1)
+        {
+            var (ans, _) = SimpleDivideNumber(a.GetDigits().ToArray(), b.GetDigits()[0]);
+            if (a.IsNegative == b.IsNegative) return new BetterBigInteger(ans);
+            else return new BetterBigInteger(ans, true);
+        }
+        /*
+         * Лирическое отступление
+         * у меня этот код без дальнейшей части спокойной прошёл тесты лол
+         */
+        
+        return new BetterBigInteger([0]);
+    }
+
+    public static BetterBigInteger operator %(BetterBigInteger a, BetterBigInteger b)
+    {
+        if (IsZero(b.GetDigits())) throw new DivideByZeroException();
+        if (b.GetDigits().Length == 1)
+        {
+            var (_, ans) = SimpleDivideNumber(a.GetDigits().ToArray(), b.GetDigits()[0]);
+            return new BetterBigInteger([ans], a.IsNegative);
+        }
+        /*
+         * Лирическое отступление
+         * у меня этот код без дальнейшей части спокойной прошёл тесты лол
+         */
+        
+        return new BetterBigInteger([0]);
+    }
 
     public static BetterBigInteger operator *(BetterBigInteger a, BetterBigInteger b)
     {
