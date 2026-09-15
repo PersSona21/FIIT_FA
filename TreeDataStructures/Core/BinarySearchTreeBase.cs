@@ -10,7 +10,7 @@ public abstract class BinarySearchTreeBase<TKey, TValue, TNode>(IComparer<TKey>?
 {
     protected TNode? Root;
     public IComparer<TKey> Comparer { get; protected set; } = comparer ?? Comparer<TKey>.Default; // use it to compare Keys
-
+    
     public int Count { get; protected set; }
     
     public bool IsReadOnly => false;
@@ -70,18 +70,16 @@ public abstract class BinarySearchTreeBase<TKey, TValue, TNode>(IComparer<TKey>?
             }
         }
     }
-
     
     public virtual bool Remove(TKey key)
     {
         TNode? node = FindNode(key);
-        if (node == null) { return false; }
+        if (node == null) return false;
 
         RemoveNode(node);
         this.Count--;
         return true;
     }
-    
     
     protected virtual void RemoveNode(TNode node)
     {
@@ -145,7 +143,9 @@ public abstract class BinarySearchTreeBase<TKey, TValue, TNode>(IComparer<TKey>?
 
     public virtual bool ContainsKey(TKey key) => FindNode(key) != null;
     
-    public virtual bool TryGetValue(TKey key, [MaybeNullWhen(false)] out TValue value)
+    
+    // [MaybeNullWhen(false)] - атрибут
+    public virtual bool TryGetValue(TKey key, [MaybeNullWhen(false)] out TValue value) 
     {
         TNode? node = FindNode(key);
         if (node != null)
@@ -290,18 +290,26 @@ public abstract class BinarySearchTreeBase<TKey, TValue, TNode>(IComparer<TKey>?
         IEnumerator<TreeEntry<TKey, TValue>>
     {
         // probably add something here
-        private TreeEntry<TKey, TValue> _current;
         private readonly TNode? _root;
-        private readonly Stack<(TNode node, int depth, bool childrenPushed)> _stack; // childrenPushed для PostOrder
         private readonly TraversalStrategy _strategy;
+
+        private TNode? curNode;
+        private int _depth;
+
+        private bool _started;
+        private bool _finished;
+        
+        private TreeEntry<TKey, TValue> _current;
         
         public TreeIterator(TNode? root, TraversalStrategy strategy)
         {
-            _root = root;
             _strategy = strategy;
-            _stack = new Stack<(TNode, int, bool)>();
+            _root = root;
+            _started = false;
+            _finished = false;
+            curNode = null;
             _current = default;
-            Reset();
+            _depth = 0;
         }
         
         public IEnumerator<TreeEntry<TKey, TValue>> GetEnumerator() => this;
@@ -309,148 +317,310 @@ public abstract class BinarySearchTreeBase<TKey, TValue, TNode>(IComparer<TKey>?
         
         public TreeEntry<TKey, TValue> Current => _current;
         object IEnumerator.Current => Current;
-
-
-        private void PushLeftChain(TNode? node, int depth)
-        {
-            while (node != null)
-            {
-                _stack.Push((node, depth, false));
-                node = node.Left;
-                depth++;
-            }
-        }
-        
-        private void PushRightChain(TNode? node, int depth)
-        {
-            while (node != null)
-            {
-                _stack.Push((node, depth, false));
-                node = node.Right;
-                depth++;
-            }
-        }
         
         public bool MoveNext()
         {
-            switch (_strategy)
+            if (_finished) return false;
+            
+            bool advanced = _strategy switch
             {
-                case TraversalStrategy.InOrder:
-                {
-                    if (_stack.Count == 0)
-                        return false;
-                    var (node, depth, _) = _stack.Pop();
-                    _current = new TreeEntry<TKey, TValue>(node.Key, node.Value, depth);
-                    PushLeftChain(node.Right, depth+1);
-                    return true;
-                }
-                
-                case TraversalStrategy.PreOrder:
-                {
-                    if (_stack.Count == 0)
-                        return false;
-                    var (node, depth, _) = _stack.Pop();
-                    _current = new TreeEntry<TKey, TValue>(node.Key, node.Value, depth);
-                
-                    // Так как с начала PreOrder то с начала проходим Left потом Right
-                    if (node.Right != null) _stack.Push((node.Right, depth+1, false));
-                    if (node.Left != null) _stack.Push((node.Left, depth+1, false));
+                TraversalStrategy.InOrder => MoveNextInOrder(),
+                TraversalStrategy.InOrderReverse => MoveNextInOrderReverse(),
+                TraversalStrategy.PreOrder => MoveNextPreOrder(),
+                TraversalStrategy.PreOrderReverse => MoveNextPreOrderReverse(),
+                TraversalStrategy.PostOrder => MoveNextPostOrder(),
+                TraversalStrategy.PostOrderReverse => MoveNextPostOrderReverse(),
+                _ => throw new NotImplementedException("Strategy not implemented"),
+            };
 
-                    return true;
-                }
-                
-                case TraversalStrategy.PostOrder:
-                {
-                    while (_stack.Count > 0)
-                    {
-                        var (node, depth, childrenPushed) = _stack.Pop();
-
-                        if (childrenPushed)
-                        {
-                            _current = new TreeEntry<TKey, TValue>(node.Key, node.Value, depth);
-                            return true;
-                        }
-                    
-                        _stack.Push((node, depth, true));
-                        if (node.Right != null) _stack.Push((node.Right, depth + 1, false));
-                        if (node.Left  != null) _stack.Push((node.Left,  depth + 1, false));
-                    }
-                    return false;
-                }
-
-                case TraversalStrategy.InOrderReverse:
-                {
-                    if (_stack.Count == 0)
-                        return false;
-
-                    var (node, depth, _) = _stack.Pop();
-                    _current = new TreeEntry<TKey, TValue>(node.Key, node.Value, depth);
-                    PushRightChain(node.Left, depth+1);
-                    return true;
-                }
-
-                case TraversalStrategy.PreOrderReverse:
-                {
-                    if (_stack.Count == 0)
-                        return false;
-
-                    var (node, depth, _) = _stack.Pop();
-                    _current = new TreeEntry<TKey, TValue>(node.Key, node.Value, depth);
-                    if (node.Left != null) _stack.Push((node.Left, depth+1,false));
-                    if (node.Right != null) _stack.Push((node.Right, depth+1,false));
-                    return true;
-                }
-
-                case TraversalStrategy.PostOrderReverse:
-                {
-                    while (_stack.Count > 0)
-                    {
-                        var (node, depth, childrenPushed) = _stack.Pop();
-
-                        if (childrenPushed)
-                        {
-                            _current = new TreeEntry<TKey, TValue>(node.Key, node.Value, depth);
-                            return true;
-                        }
-                        
-                        _stack.Push((node, depth, true));
-                        if (node.Left != null) _stack.Push((node.Left, depth+1, false));
-                        if (node.Right != null) _stack.Push((node.Right, depth+1, false));
-                        
-                    }
-
-                    return false;
-                }
-                    
-                default:
-                    throw new NotImplementedException("Strategy not implemented");
+            if (!advanced)
+            {
+                Finish();
+                return false;
             }
+
+            _current = new TreeEntry<TKey, TValue>(curNode!.Key, curNode.Value, _depth);
+            return true;
+        }
+        
+        private bool MoveNextInOrder()
+        {
+            // ищем первую ноду
+            if (!_started)
+            {
+                _started = true;
+                if (_root == null) return false;
+                
+                curNode = _root;
+                while (curNode.Left != null)
+                {
+                    curNode = curNode.Left;
+                    _depth++;
+                }
+
+                return true;
+            }
+
+            // проходим вправо и спускаемся вниз влево
+            if (curNode!.Right != null)
+            {
+                curNode = curNode.Right;
+                _depth++;
+                while (curNode.Left != null)
+                {
+                    curNode = curNode.Left;
+                    _depth++;
+                }
+                return true;
+            }
+
+            // поднимаемся вверх и выводим вершину, если мы пришли из левого сына
+            while (true)
+            {
+                if (curNode == _root) return false;
+
+                bool flag = curNode!.IsLeftChild;
+                curNode = curNode.Parent;
+                _depth--;
+
+                if (flag) return true;
+            }
+        }
+
+        private bool MoveNextInOrderReverse()
+        {
+            // ищем первую ноду
+            if (!_started)
+            {
+                _started = true;
+                if (_root == null) return false;
+                
+                curNode = _root;
+                while (curNode.Right != null)
+                {
+                    curNode = curNode.Right;
+                    _depth++;
+                }
+
+                return true;
+            }
+
+            // проходим влево и спускаемся вниз вправо
+            if (curNode!.Left != null)
+            {
+                curNode = curNode.Left;
+                _depth++;
+                while (curNode.Right != null)
+                {
+                    curNode = curNode.Right;
+                    _depth++;
+                }
+                return true;
+            }
+
+            // поднимаемся вверх и выводим вершину, если мы пришли из правого сына
+            while (true)
+            {
+                if (curNode == _root) return false;
+
+                bool flag = curNode!.IsRightChild;
+                curNode = curNode.Parent;
+                _depth--;
+
+                if (flag) return true;
+            }
+        }
+
+        private bool MoveNextPreOrder()
+        {
+            // ищем первую ноду
+            if (!_started)
+            {
+                _started = true;
+                if (_root == null) return false;
+                
+                curNode = _root;
+                return true;
+            }
+
+            // проходим влево
+            if (curNode!.Left != null)
+            {
+                curNode = curNode.Left;
+                _depth++;
+                return true;
+            }
+            
+            // проходим вправо
+            if (curNode!.Right != null)
+            {
+                curNode = curNode.Right;
+                _depth++;
+                return true;
+            }
+
+            // поднимаемся вверх и идём вправо, если мы пришли слева
+            while (true)
+            {
+                if (curNode == _root) return false;
+                
+                bool flag = curNode!.IsLeftChild;
+                curNode = curNode.Parent;
+                _depth--;
+                
+                if (flag && curNode!.Right != null)
+                {
+                    curNode = curNode!.Right;
+                    _depth++;
+                    return true;
+                }
+            }
+        }
+        
+        private bool MoveNextPreOrderReverse()
+        {
+            // ищем первую ноду
+            if (!_started)
+            {
+                _started = true;
+                if (_root == null) return false;
+                
+                curNode = _root;
+                return true;
+            }
+
+            // проходим вправо
+            if (curNode!.Right != null)
+            {
+                curNode = curNode.Right;
+                _depth++;
+                return true;
+            }
+            
+            // проходим влево
+            if (curNode!.Left != null)
+            {
+                curNode = curNode.Left;
+                _depth++;
+                return true;
+            }
+
+            // поднимаемся вверх и идём влево, если мы пришли справа
+            while (true)
+            {
+                if (curNode == _root) return false;
+                
+                bool flag = curNode!.IsRightChild;
+                curNode = curNode.Parent;
+                _depth--;
+                
+                if (flag && curNode!.Left != null)
+                {
+                    curNode = curNode!.Left;
+                    _depth++;
+                    return true;
+                }
+            }
+        }
+
+        private bool MoveNextPostOrder()
+        {
+            // идём влево и вправо до конца
+            if (!_started)
+            {
+                _started = true;
+                if (_root == null) return false;
+                curNode = _root;
+
+                while (curNode!.Left != null || curNode!.Right != null)
+                {
+                    curNode = curNode.Left ?? curNode.Right;
+                    _depth++;
+                }
+
+                return true;
+            }
+            
+            // если мы в корне, то обход закончен
+            if (curNode == _root) return false;
+            
+            var parent = curNode!.Parent!;
+
+            // если пришли справа или нет правого ребенка
+            if (curNode.IsRightChild || parent.Right == null)
+            {
+                curNode = parent;
+                _depth--;
+                return true;
+            }
+            
+            // cтановимся правым сыном и потом заново обходим
+            curNode = parent.Right!;
+            while (curNode!.Left != null || curNode!.Right != null)
+            {
+                curNode = curNode.Left ?? curNode.Right;
+                _depth++;
+            }
+
+            return true;
+        }
+        
+        private bool MoveNextPostOrderReverse()
+        {
+            // идём вправо и влево до конца
+            if (!_started)
+            {
+                _started = true;
+                if (_root == null) return false;
+                curNode = _root;
+
+                while (curNode!.Left != null || curNode!.Right != null)
+                {
+                    curNode = curNode.Right ?? curNode.Left;
+                    _depth++;
+                }
+
+                return true;
+            }
+            
+            // если мы в корне, то обход закончен
+            if (curNode == _root) return false;
+            
+            var parent = curNode!.Parent!;
+
+            // если пришли слева или нет левого ребенка
+            if (curNode.IsLeftChild || parent.Left == null)
+            {
+                curNode = parent;
+                _depth--;
+                return true;
+            }
+            
+            // cтановимся левым сыном и потом заново обходим
+            curNode = parent.Left!;
+            while (curNode!.Left != null || curNode!.Right != null)
+            {
+                curNode = curNode.Right ?? curNode.Left;
+                _depth++;
+            }
+
+            return true;
+        }
+        
+        private void Finish()
+        {
+            _finished = true;
+            _current = default;
+            curNode = null;
         }
         
         public void Reset()
         {
-            _stack.Clear();
-
-            switch (_strategy)
-            {
-                case TraversalStrategy.InOrder:
-                    PushLeftChain(_root, 0);
-                    break;
-                
-                case TraversalStrategy.InOrderReverse:
-                    PushRightChain(_root, 0);
-                    break;
-                
-                case TraversalStrategy.PreOrder:
-                case TraversalStrategy.PostOrder:
-                case TraversalStrategy.PreOrderReverse:
-                case TraversalStrategy.PostOrderReverse:    
-                    if (_root != null) _stack.Push((_root, 0, false));
-                    break;
-                
-                default:
-                    throw new NotImplementedException("Strategy not implemented");
-            }
+            _depth = 0;
+            curNode = null;
+            _started = false;
+            _finished = false;
+            _current = default;
         }
         
         public void Dispose()
