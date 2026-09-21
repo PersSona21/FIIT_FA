@@ -185,7 +185,6 @@ public abstract class BinarySearchTreeBase<TKey, TValue, TNode>(IComparer<TKey>?
     #region Helpers
     protected abstract TNode CreateNode(TKey key, TValue value);
     
-    
     protected TNode? FindNode(TKey key)
     {
         TNode? current = Root;

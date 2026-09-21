@@ -135,14 +135,19 @@ public sealed class BetterBigInteger : IBigInteger
         uint carry = 0;
         uint[] result = new uint[maxLen + 1];
 
+        //  складываем двумя половинками
         for (int i = 0; i < maxLen; ++i)
         {
             uint digitA = (a.Length > i) ? a[i] : 0;
             uint digitB = (b.Length > i) ? b[i] : 0;
-            ulong sum = (ulong)digitA + digitB + carry;
-            
-            result[i] = (uint)sum;
-            carry = (uint)(sum >> 32);
+            var digitALow = digitA & 0xFFFF;
+            var digitAHigh = digitA >> 16;
+            var digitBLow = digitB & 0xFFFF;
+            var digitBHigh = digitB >> 16;
+            uint sumLow = digitALow + digitBLow + carry;
+            uint sumHigh = digitAHigh + digitBHigh + (sumLow >> 16);
+            carry = sumHigh >> 16;
+            result[i] = (sumHigh << 16) | (sumLow & 0xFFFF);
         }
 
         if (carry == 0) Array.Resize(ref result, maxLen);
@@ -153,25 +158,44 @@ public sealed class BetterBigInteger : IBigInteger
     {
         var maxLen = a.Length;
         uint[] result = new uint[maxLen];
-        uint carry = 0;
+        uint borrow = 0;  // заём
 
         for (int i = 0; i < maxLen; ++i)
         {
             uint digitA = a[i];
             uint digitB = (b.Length > i) ? b[i] : 0;
-            ulong sum;
-            if (digitA >= ((ulong)digitB + carry))
+            var aLow = digitA & 0xFFFF;
+            var aHigh = digitA >> 16;
+            var bLow = digitB & 0xFFFF;
+            var bHigh = digitB >> 16;
+
+            uint resLow = 0;
+            uint resHigh = 0;
+            
+            if (aLow >= bLow + borrow)
             {
-                sum = digitA - digitB - carry;
-                carry = 0;
+                resLow = aLow - bLow - borrow;
+                borrow = 0;
             }
             else
             {
-                sum = (1ul << 32) + digitA - digitB - carry;
-                carry = 1;
+                resLow = aLow + 0x10000 - bLow - borrow; // 2^16
+                borrow = 1;
             }
-
-            result[i] = (uint)sum;
+            
+            if (aHigh >= bHigh + borrow)
+            {
+                resHigh = aHigh - bHigh - borrow;
+                borrow = 0;
+            }
+            else
+            {
+                resHigh = aHigh + 0x10000 - bHigh - borrow; // 2^16
+                borrow = 1;
+            }
+            
+            result[i] = (resHigh << 16) | resLow;
+            
         }
     
         int len = GetSignificantLength(result);
@@ -223,49 +247,114 @@ public sealed class BetterBigInteger : IBigInteger
     {
         var result = new uint[a.Length];
 
-        uint reminder = 0;
+        uint remainder = 0;
 
         for (var i = a.Length - 1; i >= 0; --i)
         {
-            ulong current = reminder * (1ul << 32) + a[i];
-            result[i] = (uint)(current / b);
-            reminder = (uint)(current % b);
-        }
-        
-        return (result, reminder);
-    }
+            // проходим по всем битам числа
+            for (var bitPos = 31; bitPos >= 0; --bitPos)
+            {
+                // получаем битик
+                var bit = (a[i] >> bitPos) & 1;
+                
+                // делим на 2 чтобы не было переполнения
+                uint threshold = bit == 0
+                    ? (b >> 1) + (b & 1)
+                    : b >> 1;
 
+                // 2 * remainder + bit >= b
+                if (remainder >= threshold)
+                {
+                    remainder -= (b - remainder - bit);
+                    result[i] |= 1u << bitPos;
+                }
+                else
+                {
+                    remainder = (remainder << 1) | bit;
+                }
+            }
+        }
+
+        return (result, remainder);
+    }
+    
+    private static (BetterBigInteger quotient, BetterBigInteger remainder) DivModMagnitudes(BetterBigInteger a, BetterBigInteger b)
+    {
+        // |a| < |b|
+        if (CompareMagnitudes(a.GetDigits(), b.GetDigits()) < 0)
+        {
+            return (new BetterBigInteger([0]), a);
+        }
+
+        var aDigits = a.GetDigits();
+        
+        var quotient = new BetterBigInteger([0]); // частное
+        var remainder = new BetterBigInteger([0]); // остаток
+        
+        var base32 = new BetterBigInteger([0, 1]); // 2^32
+
+        // от старшего разряда к младшему
+        for (int i = aDigits.Length - 1; i >= 0; --i)
+        {
+            
+            // remainder = remainder * 2^32 + aDigits[i]
+            remainder = remainder * base32 + new BetterBigInteger([aDigits[i]]);
+            
+            uint low = 0;
+            uint high = uint.MaxValue;
+            uint digit = 0;
+            
+            // бин поиск
+            while (low <= high)
+            {
+                uint mid = low + (high - low) / 2;
+
+                var candidate = new BetterBigInteger([mid]) * b;
+
+                // mid * |b| <= remainder
+                if (CompareMagnitudes(candidate.GetDigits(), remainder.GetDigits()) <= 0)
+                {
+                    digit = mid;
+                    if (mid == uint.MaxValue) break;
+                    low = mid + 1;
+                }
+                else
+                {
+                    // mid * |b| > remainder
+                    if (mid == 0) break;
+                    high = mid - 1;
+                }
+            }
+
+            // просто делим
+            quotient = quotient * base32 + new BetterBigInteger([digit]);
+
+            // получаем остаток
+            remainder = remainder - new BetterBigInteger([digit]) * b;
+        }
+
+        return (quotient, remainder);
+    }
+    
     public static BetterBigInteger operator /(BetterBigInteger a, BetterBigInteger b)
     {
         if (IsZero(b.GetDigits())) throw new DivideByZeroException();
-        if (b.GetDigits().Length == 1)
-        {
-            var (ans, _) = SimpleDivideNumber(a.GetDigits().ToArray(), b.GetDigits()[0]);
-            if (a.IsNegative == b.IsNegative) return new BetterBigInteger(ans);
-            else return new BetterBigInteger(ans, true);
-        }
-        /*
-         * Лирическое отступление
-         * у меня этот код без дальнейшей части спокойной прошёл тесты лол
-         */
         
-        return new BetterBigInteger([0]);
+        var aAbs = new BetterBigInteger(a.GetDigits().ToArray());
+        var bAbs = new BetterBigInteger(b.GetDigits().ToArray());
+        var (ans, _) = DivModMagnitudes(aAbs, bAbs);
+        bool resultNegative = a.IsNegative != b.IsNegative;
+        return new BetterBigInteger(ans.GetDigits().ToArray(), resultNegative);
     }
 
     public static BetterBigInteger operator %(BetterBigInteger a, BetterBigInteger b)
     {
         if (IsZero(b.GetDigits())) throw new DivideByZeroException();
-        if (b.GetDigits().Length == 1)
-        {
-            var (_, ans) = SimpleDivideNumber(a.GetDigits().ToArray(), b.GetDigits()[0]);
-            return new BetterBigInteger([ans], a.IsNegative);
-        }
-        /*
-         * Лирическое отступление
-         * у меня этот код без дальнейшей части спокойной прошёл тесты лол
-         */
-        
-        return new BetterBigInteger([0]);
+    
+        var aAbs = new BetterBigInteger(a.GetDigits().ToArray());
+        var bAbs = new BetterBigInteger(b.GetDigits().ToArray());
+        var (_, ans) = DivModMagnitudes(aAbs, bAbs);
+        return new BetterBigInteger(ans.GetDigits().ToArray(), a.IsNegative);
     }
 
     public static BetterBigInteger operator *(BetterBigInteger a, BetterBigInteger b)
