@@ -8,9 +8,14 @@ internal class SimpleMultiplier : IMultiplier
 
     public BetterBigInteger Multiply(BetterBigInteger a, BetterBigInteger b)
     {
-        var digits1 = a.GetDigits();
-        var digits2 = b.GetDigits();
-
+        if (BetterBigInteger.IsZero(a.GetDigits()) || BetterBigInteger.IsZero(b.GetDigits())) 
+            return new BetterBigInteger([0]);
+        var result = MultiplyCore(a.GetDigits(), b.GetDigits());
+        return new BetterBigInteger(result, a.IsNegative != b.IsNegative);
+    }
+    
+    internal static uint[] MultiplyCore(ReadOnlySpan<uint> digits1, ReadOnlySpan<uint> digits2)
+    {
         var result = new uint[digits1.Length + digits2.Length];
 
         for (var i = 0; i < digits1.Length; ++i)
@@ -72,6 +77,6 @@ internal class SimpleMultiplier : IMultiplier
             result[i + digits2.Length] = carry;
         }
 
-        return new BetterBigInteger(result, a.IsNegative != b.IsNegative);
+        return result;
     }
 }

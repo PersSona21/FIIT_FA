@@ -129,7 +129,7 @@ public sealed class BetterBigInteger : IBigInteger
         return hash.ToHashCode();
     }
 
-    private static uint[] AddValues(ReadOnlySpan<uint> a, ReadOnlySpan<uint> b)
+    internal static uint[] AddValues(ReadOnlySpan<uint> a, ReadOnlySpan<uint> b)
     {
         var maxLen = Math.Max(a.Length, b.Length);
         uint carry = 0;
@@ -154,7 +154,7 @@ public sealed class BetterBigInteger : IBigInteger
         return result;
     }
 
-    private static uint[] SubtractValues(ReadOnlySpan<uint> a, ReadOnlySpan<uint> b)
+    internal static uint[] SubtractValues(ReadOnlySpan<uint> a, ReadOnlySpan<uint> b)
     {
         var maxLen = a.Length;
         uint[] result = new uint[maxLen];
@@ -355,12 +355,20 @@ public sealed class BetterBigInteger : IBigInteger
         var bAbs = new BetterBigInteger(b.GetDigits().ToArray());
         var (_, ans) = DivModMagnitudes(aAbs, bAbs);
         return new BetterBigInteger(ans.GetDigits().ToArray(), a.IsNegative);
+
     }
 
     public static BetterBigInteger operator *(BetterBigInteger a, BetterBigInteger b)
     {
-        var mult = new SimpleMultiplier();
-        return mult.Multiply(a, b);
+        const int strategyThreshold = 8;
+        int maxLen = Math.Max(a.GetDigits().Length, b.GetDigits().Length);
+
+        IMultiplier strategy = maxLen <= strategyThreshold 
+            ? new SimpleMultiplier() 
+            : new KaratsubaMultiplier();
+
+        return strategy.Multiply(a, b);
+
     }
     
     public static BetterBigInteger operator ~(BetterBigInteger a)
@@ -509,7 +517,7 @@ public sealed class BetterBigInteger : IBigInteger
     
     public override string ToString() => ToString(10);
 
-    private static bool IsZero(ReadOnlySpan<uint> digits)
+    internal static bool IsZero(ReadOnlySpan<uint> digits)
     {
         foreach (var d in digits)
             if (d != 0) return false;
